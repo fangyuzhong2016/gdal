@@ -6,9 +6,9 @@ gdal_viewshed
 
 .. only:: html
 
-    Calculates a viewshed raster from an input raster DEM using method defined in [Wang2000]_ for a user defined point.
+    .. versionadded:: 3.1.0
 
-.. versionadded:: 3.1.0
+    Calculates a viewshed raster from an input raster DEM using method defined in [Wang2000]_ for a user defined point.
 
 .. Index:: gdal_viewshed
 
@@ -24,15 +24,15 @@ Synopsis
                  [-vv <visibility>] [-iv <invisibility>]
                  [-ov <out_of_range>] [-cc <curvature_coef>]
                  [[-co NAME=VALUE] ...]
-                 [-q]
+                 [-q] [-om <output mode>]
                  <src_filename> <dst_filename>
 
 Description
 -----------
 
-The :program:`gdal_viewshed` generates a binary visibility raster from one band
+By default the :program:`gdal_viewshed` generates a binary visibility raster from one band
 of the input raster elevation model (DEM). The output raster will be of type
-Byte.
+Byte. With the -mode flag can also return a minimum visible height raster of type Float64.
 
 .. note::
     The algorithm as implemented currently will only output meaningful results
@@ -80,13 +80,42 @@ Byte.
 .. option:: -cc <value>
 
    Coefficient to consider the effect of the curvature and refraction.
+   When calculating visibility between two points (i.e. Line Of Sight or Viewshed),
+   The magnitude of this effect varies with atmospheric conditions and depends on the wavelength.
+
+   Different applications for calculating visibility use different interchangeable notation to describe this phenomena:
+   Refraction Coefficient, Curvature Coefficient, and Sphere Diameter Factor.
+   gdal_viewshed uses the Curvature Coefficient notation.
+
+   .. math::
+
+     {CurvCoeff}=1-{RefractionCoeff}
+
+   Changes in air density curve the light downward causing an observer to see further and the earth to appear less curved,
+   as if the sphere (earth) diameter is larger then it actually is.
+   The ratio between that imaginary sphere diameter and the actual sphere diameter is given by the formula:
+
+   .. math::
+     {SphereDiameterFactor}=1/{CurvCoeff}=1/(1-{RefractionCoeff})
+
+   For visible light, the standard atmospheric refraction coefficient that is generally used is 1/7.
+   Thus the default value for CurvCoeff that gdal_viewshed uses is 0.85714 (=~ 1-1/7).
+
    The height of the DEM is corrected according to the following formula:
 
    .. math::
 
       Height_{Corrected}=Height_{DEM}-{CurvCoeff}\frac{{TargetDistance}^2}{SphereDiameter}
 
-   For atmospheric refraction we can use 0.85714
+   Typical coefficient values are given in the table below (use Curvature Coeff value for the cc option)
+
+   ================  ==================  ===================  =====================
+   Use Case          Refraction Coeff    **Curvature Coeff**  Sphere Diameter Factor
+   No Refraction     0                   1                    1
+   Visible Light     1/7                 6/7 (=~0.85714)      7/6 (=~1.1666)
+   Radio Waves       0.25 ~ 0.325        0.75 ~ 0.675         1.33 ~ 1.48
+   Flat Earth        1                   0                    inf
+   ================  ==================  ===================  =====================
 
 .. option:: -iv <value>
 
@@ -94,12 +123,26 @@ Byte.
 
 .. option:: -ov <value>
 
-   Pixel value to set for the cells that fall outside of the range specified by 
+   Pixel value to set for the cells that fall outside of the range specified by
    the observer location and the maximum distance. Default: 0
 
 .. option:: -vv <value>
 
    Pixel value to set for visible areas. Default: 255
+
+.. option:: -om <output mode>
+
+  Sets what information the output contains.
+
+  Possible values: VISIBLE, DEM, GROUND
+
+  VISIBLE returns a raster of type Byte containing visible locations.
+
+  DEM and GROUND will return a raster of type Float64 containing the minimum target
+  height for target to be visible from the DEM surface or ground level respectively.
+  Flags -tz, -iv and -vv will be ignored.
+
+  Default VISIBLE
 
 C API
 -----

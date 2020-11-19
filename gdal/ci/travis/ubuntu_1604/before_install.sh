@@ -8,8 +8,8 @@ sudo apt-get update
 sudo apt-get install -y debootstrap libcap2-bin dpkg docker
 
 # MSSQL: server side
-docker pull microsoft/mssql-server-linux:2017-latest
-sudo docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=DummyPassw0rd'  -p 1433:1433 --name sql1 -d microsoft/mssql-server-linux:2017-latest
+docker pull mcr.microsoft.com/mssql/server:2017-latest
+sudo docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=DummyPassw0rd'  -p 1433:1433 --name sql1 -d mcr.microsoft.com/mssql/server:2017-latest
 sleep 10
 docker exec -it sql1 /opt/mssql-tools/bin/sqlcmd -l 30 -S localhost -U SA -P DummyPassw0rd -Q "CREATE DATABASE TestDB;"
 
@@ -56,18 +56,9 @@ sudo cp FileGDB_API-64gcc51/lib/* "$chroot/usr/lib"
 sudo chroot "$chroot" ldconfig
 
 # PDFium
-wget https://github.com/rouault/pdfium_build_gdal_3_1/releases/download/v1_pdfium_3922/install-ubuntu1604-rev3922.tar.gz
-tar xzf install-ubuntu1604-rev3922.tar.gz
+wget https://github.com/rouault/pdfium_build_gdal_3_2/releases/download/v1_pdfium_4272/install-ubuntu1604-rev4272.tar.gz
+tar xzf install-ubuntu1604-rev4272.tar.gz
 sudo cp -r install/* "$chroot/usr/"
 rm -rf install
 
 sudo chroot "$chroot" sh -c "curl -sSL 'https://bootstrap.pypa.io/get-pip.py' | python"
-sudo chroot "$chroot" pip install flake8
-# flake8 codes to just emulate pyflakes (http://flake8.pycqa.org/en/latest/user/error-codes.html)
-FLAKE8="flake8 --select=F401,F402,F403,F404,F405,F406,F407,F601,F602,F621,F622,F631,F701,F702,F703,F704,F705,F706,F707,F721,F722,F811,F812,F821,F822,F823,F831,F841,F901"
-
-chroot "$chroot" sh -c "cd $PWD && $FLAKE8 autotest"
-chroot "$chroot" sh -c "cd $PWD && $FLAKE8 gdal/swig/python/scripts"
-chroot "$chroot" sh -c "cd $PWD && $FLAKE8 gdal/swig/python/samples"
-
-sudo chroot "$chroot" apt-get install -y cppcheck bash

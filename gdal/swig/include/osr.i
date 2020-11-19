@@ -340,6 +340,10 @@ public:
     return OSRIsGeographic(self);
   }
 
+  int IsDerivedGeographic() {
+    return OSRIsDerivedGeographic(self);
+  }
+
   int IsProjected() {
     return OSRIsProjected(self);
   }
@@ -1104,6 +1108,10 @@ public:
   OGRErr PromoteTo3D( const char* name = NULL ) {
     return OSRPromoteTo3D(self, name);
   }
+
+  OGRErr DemoteTo2D( const char* name = NULL ) {
+    return OSRDemoteTo2D(self, name);
+  }
 %apply Pointer NONNULL {const char* name};
 
 } /* %extend */
@@ -1255,7 +1263,7 @@ public:
 /*                   GetCRSInfoListFromDatabase()                       */
 /************************************************************************/
 
-#ifdef SWIGPYTHON
+#if defined(SWIGPYTHON) || defined(SWIGCSHARP)
 
 %rename (CRSType) OSRCRSType;
 typedef enum OSRCRSType
@@ -1401,6 +1409,9 @@ const char* OSRCRSInfo_projection_method_get( OSRCRSInfo *crsInfo ) {
 
 %}
 
+#endif
+
+#ifdef SWIGPYTHON
 %inline %{
 void GetCRSInfoListFromDatabase( const char *authName,
                                  OSRCRSInfo*** pList,

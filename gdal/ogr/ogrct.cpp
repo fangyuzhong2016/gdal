@@ -31,6 +31,7 @@
 #include "ogr_spatialref.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -495,7 +496,7 @@ void OGRCoordinateTransformation::DestroyCT( OGRCoordinateTransformation* poCT )
  * 
  * This will honour the axis order advertized by the source and target SRS,
  * as well as their "data axis to SRS axis mapping".
- * To have a behaviour similar to GDAL &lt; 3.0, the OGR_CT_FORCE_TRADITIONAL_GIS_ORDER
+ * To have a behavior similar to GDAL &lt; 3.0, the OGR_CT_FORCE_TRADITIONAL_GIS_ORDER
  * configuration option can be set to YES.
  *
  * @param poSource source spatial reference system.
@@ -525,7 +526,7 @@ OGRCreateCoordinateTransformation( const OGRSpatialReference *poSource,
  * 
  * This will honour the axis order advertized by the source and target SRS,
  * as well as their "data axis to SRS axis mapping".
- * To have a behaviour similar to GDAL &lt; 3.0, the OGR_CT_FORCE_TRADITIONAL_GIS_ORDER
+ * To have a behavior similar to GDAL &lt; 3.0, the OGR_CT_FORCE_TRADITIONAL_GIS_ORDER
  * configuration option can be set to YES.
  *
  * The source SRS and target SRS should generally not be NULL. This is only
@@ -537,16 +538,16 @@ OGRCreateCoordinateTransformation( const OGRSpatialReference *poSource,
  * use is compatible with the points to transform. It is only taken into account
  * if no user defined coordinate transformation pipeline has been specified.
  * <ul>
- * <li>PROJ means the default behaviour used by PROJ proj_create_crs_to_crs().
+ * <li>PROJ means the default behavior used by PROJ proj_create_crs_to_crs().
  *     In particular the operation to use among several initial candidates is
  *     evaluated for each point to transform.</li>
  * <li>BEST_ACCURACY means the operation whose accuracy is best. It should be
- *     close to PROJ behaviour, except that the operation to select is decided
+ *     close to PROJ behavior, except that the operation to select is decided
  *     for the average point of the coordinates passed in a single Transform() call.</li>
  * <li>FIRST_MATCHING is the operation ordered first in the list of candidates:
  *     it will not necessarily have the best accuracy, but generally a larger area of
  *     use.  It is evaluated for the average point of the coordinates passed in a
- *     single Transform() call. This was the default behaviour for GDAL 3.0.0 to
+ *     single Transform() call. This was the default behavior for GDAL 3.0.0 to
  *     3.0.2</li>
  * </ul>
  *
@@ -600,7 +601,7 @@ OGRCreateCoordinateTransformation( const OGRSpatialReference *poSource,
  * 
  * This will honour the axis order advertized by the source and target SRS,
  * as well as their "data axis to SRS axis mapping".
- * To have a behaviour similar to GDAL &lt; 3.0, the OGR_CT_FORCE_TRADITIONAL_GIS_ORDER
+ * To have a behavior similar to GDAL &lt; 3.0, the OGR_CT_FORCE_TRADITIONAL_GIS_ORDER
  * configuration option can be set to YES.
  *
  * @param hSourceSRS source spatial reference system.
@@ -639,7 +640,7 @@ OCTNewCoordinateTransformation(
  *
  * This will honour the axis order advertized by the source and target SRS,
  * as well as their "data axis to SRS axis mapping".
- * To have a behaviour similar to GDAL &lt; 3.0, the OGR_CT_FORCE_TRADITIONAL_GIS_ORDER
+ * To have a behavior similar to GDAL &lt; 3.0, the OGR_CT_FORCE_TRADITIONAL_GIS_ORDER
  * configuration option can be set to YES.
  *
  * If options contains a user defined coordinate transformation pipeline, it
@@ -728,7 +729,12 @@ int OGRProjCT::Initialize( const OGRSpatialReference * poSourceIn,
     if( poSourceIn == nullptr || poTargetIn == nullptr )
     {
         if( options.d->osCoordOperation.empty() )
+        {
+            CPLError(CE_Failure, CPLE_AppDefined,
+                     "OGRProjCT::Initialize(): if source and/or target CRS "
+                     "are null, a coordinate operation must be specified");
             return FALSE;
+        }
     }
 
     if( poSourceIn )
@@ -948,7 +954,7 @@ int OGRProjCT::Initialize( const OGRSpatialReference * poSourceIn,
                  m_bReversePj ? "(reversed) " : "");
 #endif
     }
-    else if( !bWebMercatorToWGS84LongLat )
+    else if( !bWebMercatorToWGS84LongLat && poSRSSource && poSRSTarget )
     {
         const auto CanUseAuthorityDef = [](const OGRSpatialReference* poSRS1,
                                            OGRSpatialReference* poSRSFromAuth,
@@ -1006,12 +1012,19 @@ int OGRProjCT::Initialize( const OGRSpatialReference * poSourceIn,
             {
                 CPLErrorStateBackuper oErrorStateBackuper;
                 CPLErrorHandlerPusher oErrorHandler(CPLQuietErrorHandler);
-                const char *pszProjName = poSRS->GetAttrValue("PROJECTION");
                 const char* const apszOptionsWKT2_2018[] = { "FORMAT=WKT2_2018", nullptr };
-                const char* const apszOptionsWKT1[] = { "FORMAT=WKT1_GDAL", nullptr };
-                // NetCDF hack
-                if( pszProjName && EQUAL(pszProjName, "Rotated_pole") )
-                    poSRS->exportToWkt(&pszText, apszOptionsWKT1);
+                // If there's a PROJ4 EXTENSION node in WKT1, then use
+                // it. For example when dealing with "+proj=longlat +lon_wrap=180"
+                if( poSRS->GetExtension(nullptr, "PROJ4", nullptr) )
+                {
+                    poSRS->exportToProj4(&pszText);
+                    if (strstr(pszText, " +type=crs") == nullptr )
+                    {
+                        auto tmpText = std::string(pszText) + " +type=crs";
+                        CPLFree(pszText);
+                        pszText = CPLStrdup(tmpText.c_str());
+                    }
+                }
                 else
                     poSRS->exportToWkt(&pszText, apszOptionsWKT2_2018);
             }
@@ -1020,6 +1033,10 @@ int OGRProjCT::Initialize( const OGRSpatialReference * poSourceIn,
 
         char* pszSrcSRS = exportSRSToText(poSRSSource);
         char* pszTargetSRS = exportSRSToText(poSRSTarget);
+#ifdef DEBUG
+        CPLDebug("OGR_CT", "Source CRS: '%s'", pszSrcSRS);
+        CPLDebug("OGR_CT", "Target CRS: '%s'", pszTargetSRS);
+#endif
 
         if( m_eStrategy == Strategy::PROJ )
         {
@@ -1064,7 +1081,7 @@ int OGRProjCT::Initialize( const OGRSpatialReference * poSourceIn,
         CPLFree(pszTargetSRS);
     }
 
-    if( options.d->osCoordOperation.empty() )
+    if( options.d->osCoordOperation.empty() && poSRSSource && poSRSTarget )
     {
         // Determine if we can skip the transformation completely.
         bNoTransform = !bSourceWrap && !bTargetWrap &&
@@ -1229,6 +1246,12 @@ bool OGRProjCT::ListCoordinateOperations(const char* pszSrcSRS,
         geodetic_crs_type == PJ_TYPE_GEOGRAPHIC_3D_CRS )
     {
         auto datum = proj_crs_get_datum(ctx, geodetic_crs);
+#if PROJ_VERSION_MAJOR > 7 || (PROJ_VERSION_MAJOR == 7 && PROJ_VERSION_MINOR >= 2)
+        if( datum == nullptr )
+        {
+            datum = proj_crs_get_datum_ensemble(ctx, geodetic_crs);
+        }
+#endif
         if( datum )
         {
             auto cs = proj_create_ellipsoidal_2D_cs(
@@ -1549,6 +1572,7 @@ int OGRProjCT::Transform( int nCount, double *x, double *y, double *z,
     if( bSourceLatLong && bSourceWrap )
     {
         OGRAxisOrientation orientation;
+        assert( poSRSSource );
         poSRSSource->GetAxis(nullptr, 0, &orientation);
         if( orientation == OAO_East )
         {
@@ -1961,6 +1985,7 @@ int OGRProjCT::Transform( int nCount, double *x, double *y, double *z,
     if( bTargetLatLong && bTargetWrap )
     {
         OGRAxisOrientation orientation;
+        assert( poSRSTarget );
         poSRSTarget->GetAxis(nullptr, 0, &orientation);
         if( orientation == OAO_East )
         {

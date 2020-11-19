@@ -13,6 +13,46 @@ Download
 Current Releases
 ------------------------------------------------------------------------------
 
+* **2020-10-26** `gdal-3.2.0.tar.gz`_ `3.2.0 Release Notes`_ (`3.2.0 md5`_)
+
+.. _`3.2.0 Release Notes`: https://github.com/OSGeo/gdal/blob/v3.2.0/gdal/NEWS
+.. _`gdal-3.2.0.tar.gz`: https://github.com/OSGeo/gdal/releases/download/v3.2.0/gdal-3.2.0.tar.gz
+.. _`3.2.0 md5`: https://github.com/OSGeo/gdal/releases/download/v3.2.0/gdal-3.2.0.tar.gz.md5
+
+Past Releases
+------------------------------------------------------------------------------
+
+* **2020-10-23** `gdal-3.1.4.tar.gz`_ `3.1.4 Release Notes`_ (`3.1.4 md5`_)
+
+.. _`3.1.4 Release Notes`: https://github.com/OSGeo/gdal/blob/v3.1.4/gdal/NEWS
+.. _`gdal-3.1.4.tar.gz`: https://github.com/OSGeo/gdal/releases/download/v3.1.4/gdal-3.1.4.tar.gz
+.. _`3.1.4 md5`: https://github.com/OSGeo/gdal/releases/download/v3.1.4/gdal-3.1.4.tar.gz.md5
+
+* **2020-09-01** `gdal-3.1.3.tar.gz`_ `3.1.3 Release Notes`_ (`3.1.3 md5`_)
+
+.. _`3.1.3 Release Notes`: https://github.com/OSGeo/gdal/blob/v3.1.3/gdal/NEWS
+.. _`gdal-3.1.3.tar.gz`: https://github.com/OSGeo/gdal/releases/download/v3.1.3/gdal-3.1.3.tar.gz
+.. _`3.1.3 md5`: https://github.com/OSGeo/gdal/releases/download/v3.1.3/gdal-3.1.3.tar.gz.md5
+
+* **2020-07-07** `gdal-3.1.2.tar.gz`_ `3.1.2 Release Notes`_ (`3.1.2 md5`_)
+
+.. _`3.1.2 Release Notes`: https://github.com/OSGeo/gdal/blob/v3.1.2/gdal/NEWS
+.. _`gdal-3.1.2.tar.gz`: https://github.com/OSGeo/gdal/releases/download/v3.1.2/gdal-3.1.2.tar.gz
+.. _`3.1.2 md5`: https://github.com/OSGeo/gdal/releases/download/v3.1.2/gdal-3.1.2.tar.gz.md5
+
+* **2020-06-22** `gdal-3.1.1.tar.gz`_ `3.1.1 Release Notes`_ (`3.1.1 md5`_)
+
+.. _`3.1.1 Release Notes`: https://github.com/OSGeo/gdal/blob/v3.1.1/gdal/NEWS
+.. _`gdal-3.1.1.tar.gz`: https://github.com/OSGeo/gdal/releases/download/v3.1.1/gdal-3.1.1.tar.gz
+.. _`3.1.1 md5`: https://github.com/OSGeo/gdal/releases/download/v3.1.1/gdal-3.1.1.tar.gz.md5
+
+
+* **2020-05-03** `gdal-3.1.0.tar.gz`_ `3.1.0 Release Notes`_ (`3.1.0 md5`_)
+
+.. _`3.1.0 Release Notes`: https://github.com/OSGeo/gdal/blob/v3.1.0/gdal/NEWS
+.. _`gdal-3.1.0.tar.gz`: https://github.com/OSGeo/gdal/releases/download/v3.1.0/gdal-3.1.0.tar.gz
+.. _`3.1.0 md5`: https://github.com/OSGeo/gdal/releases/download/v3.1.0/gdal-3.1.0.tar.gz.md5
+
 * **2020-01-28** `gdal-3.0.4.tar.gz`_ `3.0.4 Release Notes`_ (`3.0.4 md5`_)
 
 .. _`3.0.4 Release Notes`: https://github.com/OSGeo/gdal/blob/v3.0.4/gdal/NEWS
@@ -24,10 +64,6 @@ Current Releases
 .. _`2.4.4 Release Notes`: https://github.com/OSGeo/gdal/blob/v2.4.4/gdal/NEWS
 .. _`gdal-2.4.4.tar.gz`: https://download.osgeo.org/gdal/2.4.4/gdal-2.4.4.tar.gz
 .. _`2.4.4 md5`: https://download.osgeo.org/gdal/2.4.4/gdal-2.4.4.tar.gz.md5
-
-
-Past Releases
-------------------------------------------------------------------------------
 
 * **2020-01-08** `gdal-3.0.3.tar.gz`_ `3.0.3 Release Notes`_ (`3.0.3 md5`_)
 
@@ -76,6 +112,15 @@ command
 
     git clone https://github.com/OSGeo/GDAL.git
 
+
+Build requirements
+..................
+
+To build GDAL 3 or later, you need *at a minimum* a C++11 compatible compiler, and
+`PROJ 6 or later <https://proj.org>`_.
+This will only give you a minimum build which will lack a lot of drivers.
+Consult :ref:`raster_drivers` and :ref:`vector_drivers` pages for additional optional
+dependencies.
 
 Binaries
 ------------------------------------------------------------------------------

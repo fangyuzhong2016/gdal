@@ -45,6 +45,14 @@ import ogrtest
 import pytest
 import webserver
 
+pytestmark = pytest.mark.require_driver('FlatGeobuf')
+
+###############################################################################
+@pytest.fixture(autouse=True, scope='module')
+def startup_and_cleanup():
+    yield
+    gdaltest.clean_tmp()
+
 ### utils
 
 def verify_flatgeobuf_copy(name, fids, names):
@@ -103,8 +111,6 @@ def verify_flatgeobuf_copy(name, fids, names):
 
 
 def copy_shape_to_flatgeobuf(name, wkbType, compress=None, options=[]):
-    if gdaltest.flatgeobuf_drv is None:
-        return False
 
     if compress is not None:
         if compress[0:5] == '/vsig':
@@ -118,7 +124,7 @@ def copy_shape_to_flatgeobuf(name, wkbType, compress=None, options=[]):
     else:
         dst_name = os.path.join('tmp', name + '.fgb')
 
-    ds = gdaltest.flatgeobuf_drv.CreateDataSource(dst_name)
+    ds = ogr.GetDriverByName('FlatGeobuf').CreateDataSource(dst_name)
     if ds is None:
         return False
 
@@ -129,7 +135,7 @@ def copy_shape_to_flatgeobuf(name, wkbType, compress=None, options=[]):
         return False
 
     ######################################################
-    # Setup schema (all test shapefiles use common schmea)
+    # Setup schema (all test shapefiles use common schema)
     ogrtest.quick_create_layer_def(lyr,
                                    [('FID', ogr.OFTReal),
                                     ('NAME', ogr.OFTString)])
@@ -139,7 +145,7 @@ def copy_shape_to_flatgeobuf(name, wkbType, compress=None, options=[]):
 
     dst_feat = ogr.Feature(feature_def=lyr.GetLayerDefn())
 
-    src_name = os.path.join('data', name + '.shp')
+    src_name = os.path.join('data', 'shp', name + '.shp')
     shp_ds = ogr.Open(src_name)
     shp_lyr = shp_ds.GetLayer(0)
 
@@ -162,14 +168,6 @@ def copy_shape_to_flatgeobuf(name, wkbType, compress=None, options=[]):
     return True
 
 ### tests
-
-def test_ogr_flatgeobuf_1():
-
-    gdaltest.flatgeobuf_drv = ogr.GetDriverByName('FlatGeobuf')
-
-    if gdaltest.flatgeobuf_drv is not None:
-        return
-    pytest.fail()
 
 def test_ogr_flatgeobuf_2():
     fgb_ds = ogr.Open('data/testfgb/poly.fgb')
@@ -279,8 +277,6 @@ def wktRoundtrip(expected):
     assert actual == expected
 
 def test_ogr_flatgeobuf_3():
-    if gdaltest.flatgeobuf_drv is None:
-        pytest.skip()
     wkts = ogrtest.get_wkt_data_series(with_z=True, with_m=True, with_gc=True, with_circular=True, with_surface=True)
     for wkt in wkts:
         wktRoundtrip(wkt)
@@ -296,8 +292,6 @@ def test_ogr_flatgeobuf_8():
     assert ret.find('INFO') != -1 and ret.find('ERROR') == -1
 
 def test_ogr_flatgeobuf_9():
-    if gdaltest.flatgeobuf_drv is None:
-        pytest.skip()
 
     gdaltest.tests = [
         ['gjpoint', [1], ['Point 1'], ogr.wkbPoint],
@@ -331,8 +325,6 @@ def test_ogr_flatgeobuf_9():
 
 
 def test_ogr_flatgeobuf_directory():
-    if gdaltest.flatgeobuf_drv is None:
-        pytest.skip()
 
     ds = ogr.GetDriverByName('FlatGeobuf').CreateDataSource('/vsimem/multi_layer')
     with gdaltest.error_handler(): # name will be laundered
@@ -416,6 +408,40 @@ def test_ogr_flatgeobuf_datatypes():
     assert f['string'] == 'my string'
     assert f['datetime'] == '2019/10/15 12:34:56.789+00'
 
+
+def test_ogr_flatgeobuf_alldatatypes():
+    ds = ogr.Open('data/testfgb/alldatatypes.fgb')
+    lyr = ds.GetLayer(0)
+    f = lyr.GetNextFeature()
+    assert f['byte'] == -1
+    assert f['ubyte'] == 255
+    assert f['bool'] == 1
+    assert f['short'] == -1
+    assert f['ushort'] == 65535
+    assert f['int'] == -1
+    assert f['uint'] == 4294967295
+    assert f['long'] == -1
+    assert f['ulong'] == float(2**64 - 1)
+    assert f['float'] == 0
+    assert f['double'] == 0
+    assert f['string'] == 'X'
+    assert f['json'] == 'X'
+    assert f['datetime'] == '2020/02/29 12:34:56+00'
+    assert f.GetFieldAsBinary('binary') == b'\x58'
+
+def test_ogr_flatgeobuf_mixed():
+    srcDS = gdal.OpenEx('data/testfgb/testmixed.geojson')
+    destDS = gdal.VectorTranslate('/vsimem/test.fgb', srcDS=srcDS, format = 'FlatGeobuf', layerCreationOptions = ['SPATIAL_INDEX=NO'])
+    srcDS = None
+    destDS = None
+    srcDS = ogr.Open('data/testfgb/testmixed.geojson')
+    destDS = ogr.Open('/vsimem/test.fgb')
+    srcLyr = srcDS.GetLayer(0)
+    destLyr = destDS.GetLayer(0)
+    ogrtest.compare_layers(srcLyr, destLyr)
+
+    ogr.GetDriverByName('FlatGeobuf').DeleteDataSource('/vsimem/test.fgb')
+    assert not gdal.VSIStatL('/vsimem/test.fgb')
 
 ###############################################################################
 do_log = False
@@ -504,10 +530,228 @@ def test_ogr_wfs_fake_wfs_server():
 
     feat = lyr.GetNextFeature()
     if feat.GetField('CONTINENT') != 'Australia' or \
-       ogrtest.check_feature_geometry(feat, 'MULTIPOLYGON (((-42.157501 146.232727,-42.16111 146.238007,-42.169724 146.24411,-42.193329 146.257202,-42.209442 146.272217,-42.214165 146.274689,-42.21833 146.27832,-42.228882 146.282471,-42.241943 146.282745,-42.255836 146.291351,-42.261948 146.290253,-42.267502 146.288025,-42.269997 146.282471,-42.271111 146.274994,-42.270279 146.266663,-42.262505 146.251373,-42.258057 146.246918,-42.256111 146.241333,-42.257782 146.23468,-42.269165 146.221344,-42.274445 146.210785,-42.27417 146.20163,-42.271385 146.196075,-42.258057 146.186646,-42.252785 146.188568,-42.249443 146.193298,-42.248055 146.200806,-42.249168 146.209137,-42.248611 146.217468,-42.245277 146.222473,-42.240555 146.22525,-42.22805 146.224121,-42.221382 146.224396,-42.217216 146.228302,-42.212502 146.231354,-42.205559 146.231628,-42.186943 146.219421,-42.17028 146.21637,-42.16333 146.216644,-42.158607 146.219696,-42.156105 146.225525,-42.157501 146.232727)))',
+       ogrtest.check_feature_geometry(feat, 'MULTIPOLYGON (((146.232727 -42.157501,146.238007 -42.16111,146.24411 -42.169724,146.257202 -42.193329,146.272217 -42.209442,146.274689 -42.214165,146.27832 -42.21833,146.282471 -42.228882,146.282745 -42.241943,146.291351 -42.255836,146.290253 -42.261948,146.288025 -42.267502,146.282471 -42.269997,146.274994 -42.271111,146.266663 -42.270279,146.251373 -42.262505,146.246918 -42.258057,146.241333 -42.256111,146.23468 -42.257782,146.221344 -42.269165,146.210785 -42.274445,146.20163 -42.27417,146.196075 -42.271385,146.186646 -42.258057,146.188568 -42.252785,146.193298 -42.249443,146.200806 -42.248055,146.209137 -42.249168,146.217468 -42.248611,146.222473 -42.245277,146.22525 -42.240555,146.224121 -42.22805,146.224396 -42.221382,146.228302 -42.217216,146.231354 -42.212502,146.231628 -42.205559,146.219421 -42.186943,146.21637 -42.17028,146.216644 -42.16333,146.219696 -42.158607,146.225525 -42.156105,146.232727 -42.157501)))',
                                       max_error=0.00001) != 0:
         feat.DumpReadable()
         webserver.server_stop(process, port)
         pytest.fail('did not get expected feature')
 
     webserver.server_stop(process, port)
+
+
+def test_ogr_flatgeobuf_bool_short_float_binary():
+    ds = ogr.GetDriverByName('FlatGeobuf').CreateDataSource('/vsimem/test.fgb')
+    lyr = ds.CreateLayer('test', geom_type = ogr.wkbPoint)
+
+    fld_defn = ogr.FieldDefn('bool', ogr.OFTInteger)
+    fld_defn.SetSubType(ogr.OFSTBoolean)
+    lyr.CreateField(fld_defn)
+
+    fld_defn = ogr.FieldDefn('short', ogr.OFTInteger)
+    fld_defn.SetSubType(ogr.OFSTInt16)
+    lyr.CreateField(fld_defn)
+
+    fld_defn = ogr.FieldDefn('float', ogr.OFTReal)
+    fld_defn.SetSubType(ogr.OFSTFloat32)
+    lyr.CreateField(fld_defn)
+
+    lyr.CreateField(ogr.FieldDefn('bin', ogr.OFTBinary))
+
+    f = ogr.Feature(lyr.GetLayerDefn())
+    f['bool'] = True
+    f['short'] = -32768;
+    f['float'] = 1.5;
+    f.SetFieldBinaryFromHexString('bin', '01FF')
+    f.SetGeometry(ogr.CreateGeometryFromWkt('POINT (0 0)'))
+    lyr.CreateFeature(f)
+
+    # Field of size 0
+    f = ogr.Feature(lyr.GetLayerDefn())
+    f.SetFieldBinaryFromHexString('bin', '')
+    f.SetGeometry(ogr.CreateGeometryFromWkt('POINT (0 0)'))
+    lyr.CreateFeature(f)
+    ds = None
+
+    ds = ogr.Open('/vsimem/test.fgb')
+    lyr = ds.GetLayer(0)
+    assert lyr.GetLayerDefn().GetFieldDefn(0).GetType() == ogr.OFTInteger
+    assert lyr.GetLayerDefn().GetFieldDefn(0).GetSubType() == ogr.OFSTBoolean
+    assert lyr.GetLayerDefn().GetFieldDefn(1).GetType() == ogr.OFTInteger
+    assert lyr.GetLayerDefn().GetFieldDefn(1).GetSubType() == ogr.OFSTInt16
+    assert lyr.GetLayerDefn().GetFieldDefn(2).GetType() == ogr.OFTReal
+    assert lyr.GetLayerDefn().GetFieldDefn(2).GetSubType() == ogr.OFSTFloat32
+    assert lyr.GetLayerDefn().GetFieldDefn(3).GetType() == ogr.OFTBinary
+    f = lyr.GetNextFeature()
+    assert f['bool'] == True
+    assert f['short'] == -32768
+    assert f['float'] == 1.5
+    assert f.GetFieldAsBinary('bin') == b'\x01\xFF'
+    f = lyr.GetNextFeature()
+    assert f.GetFieldAsBinary('bin') == b''
+    ds = None
+
+    ogr.GetDriverByName('FlatGeobuf').DeleteDataSource('/vsimem/test.fgb')
+    assert not gdal.VSIStatL('/vsimem/test.fgb')
+
+
+@pytest.mark.parametrize("options",
+                         [[], ['SPATIAL_INDEX=NO']],
+                         ids=['spatial_index', 'no_spatial_index'])
+def test_ogr_flatgeobuf_write_to_vsizip(options):
+
+    srcDS = gdal.OpenEx('data/poly.shp')
+    destDS = gdal.VectorTranslate('/vsizip//vsimem/test.fgb.zip/test.fgb',
+                                  srcDS=srcDS,
+                                  format='FlatGeobuf',
+                                  layerCreationOptions=options)
+    assert destDS is not None
+    destDS = None
+    destDS = ogr.Open('/vsizip//vsimem/test.fgb.zip/test.fgb')
+    srcLyr = srcDS.GetLayer(0)
+    dstLyr = destDS.GetLayer(0)
+    assert dstLyr.GetFeatureCount() == srcLyr.GetFeatureCount()
+    dstF = dstLyr.GetNextFeature()
+    assert dstF is not None
+    destDS = None
+    gdal.Unlink('/vsimem/test.fgb.zip')
+
+
+def test_ogr_flatgeobuf_huge_number_of_columns():
+    ds = ogr.GetDriverByName('FlatGeobuf').CreateDataSource('/vsimem/test.fgb')
+    lyr = ds.CreateLayer('test', geom_type = ogr.wkbPoint)
+    for i in range(65536):
+        assert lyr.CreateField(ogr.FieldDefn('col%d' % i, ogr.OFTInteger)) == ogr.OGRERR_NONE, i
+    with gdaltest.error_handler():
+        assert lyr.CreateField(ogr.FieldDefn('col65536', ogr.OFTInteger)) == ogr.OGRERR_FAILURE
+    f = ogr.Feature(lyr.GetLayerDefn())
+    f.SetGeometry(ogr.CreateGeometryFromWkt('POINT (0 0)'))
+    for i in range(65536):
+        f.SetField(i, i)
+    lyr.CreateFeature(f)
+    ds = None
+
+    ds = ogr.Open('/vsimem/test.fgb')
+    lyr = ds.GetLayer(0)
+    f = lyr.GetNextFeature()
+    for i in range(65536):
+        assert f.GetField(i) == i
+    ds = None
+
+    ogr.GetDriverByName('FlatGeobuf').DeleteDataSource('/vsimem/test.fgb')
+
+def test_ogr_flatgeobuf_column_metadata():
+    ds = ogr.GetDriverByName('FlatGeobuf').CreateDataSource('/vsimem/test.fgb')
+    lyr = ds.CreateLayer('test', geom_type = ogr.wkbPoint)
+
+    fld_defn = ogr.FieldDefn('int', ogr.OFTInteger)
+    fld_defn.SetAlternativeName('an integer')
+    lyr.CreateField(fld_defn)
+
+    fld_defn = ogr.FieldDefn('str1', ogr.OFTString)
+    lyr.CreateField(fld_defn)
+
+    fld_defn = ogr.FieldDefn('str2', ogr.OFTString)
+    fld_defn.SetWidth(2)
+    fld_defn.SetNullable(False)
+    fld_defn.SetUnique(True)
+    lyr.CreateField(fld_defn)
+
+    fld_defn = ogr.FieldDefn('float1', ogr.OFTReal)
+    lyr.CreateField(fld_defn)
+
+    fld_defn = ogr.FieldDefn('float2', ogr.OFTReal)
+    fld_defn.SetWidth(5)
+    fld_defn.SetPrecision(3)
+    lyr.CreateField(fld_defn)
+
+    f = ogr.Feature(lyr.GetLayerDefn())
+    f['int'] = 1
+    f['str1'] = 'test1'
+    f['str2'] = 'test2'
+    f['float1'] = 1.1234
+    f['float2'] = 12.123
+    f.SetGeometry(ogr.CreateGeometryFromWkt('POINT (0 0)'))
+    lyr.CreateFeature(f)
+
+    ds = None
+
+    ds = ogr.Open('/vsimem/test.fgb')
+    lyr = ds.GetLayer(0)
+    assert lyr.GetLayerDefn().GetFieldDefn(0).GetType() == ogr.OFTInteger
+    assert lyr.GetLayerDefn().GetFieldDefn(0).GetAlternativeName() == 'an integer'
+    assert lyr.GetLayerDefn().GetFieldDefn(1).GetType() == ogr.OFTString
+    assert lyr.GetLayerDefn().GetFieldDefn(1).GetWidth() == 0
+    assert lyr.GetLayerDefn().GetFieldDefn(1).IsNullable() == 1
+    assert lyr.GetLayerDefn().GetFieldDefn(1).IsUnique() == 0
+    assert lyr.GetLayerDefn().GetFieldDefn(2).GetType() == ogr.OFTString
+    assert lyr.GetLayerDefn().GetFieldDefn(2).GetWidth() == 2
+    assert lyr.GetLayerDefn().GetFieldDefn(2).IsNullable() == 0
+    assert lyr.GetLayerDefn().GetFieldDefn(2).IsUnique() == 1
+    assert lyr.GetLayerDefn().GetFieldDefn(3).GetType() == ogr.OFTReal
+    assert lyr.GetLayerDefn().GetFieldDefn(3).GetWidth() == 0
+    assert lyr.GetLayerDefn().GetFieldDefn(3).GetPrecision() == 0
+    assert lyr.GetLayerDefn().GetFieldDefn(4).GetType() == ogr.OFTReal
+    assert lyr.GetLayerDefn().GetFieldDefn(4).GetWidth() == 5
+    assert lyr.GetLayerDefn().GetFieldDefn(4).GetPrecision() == 3
+    ds = None
+
+    ogr.GetDriverByName('FlatGeobuf').DeleteDataSource('/vsimem/test.fgb')
+    assert not gdal.VSIStatL('/vsimem/test.fgb')
+
+def test_ogr_flatgeobuf_editing():
+    ds = ogr.GetDriverByName('FlatGeobuf').CreateDataSource('/vsimem/test.fgb')
+    lyr = ds.CreateLayer('test', geom_type = ogr.wkbPoint)
+    fld_defn = ogr.FieldDefn('int', ogr.OFTInteger)
+    lyr.CreateField(fld_defn)
+    fld_defn = ogr.FieldDefn('str1', ogr.OFTString)
+    lyr.CreateField(fld_defn)
+    f = ogr.Feature(lyr.GetLayerDefn())
+    f.SetGeometry(ogr.CreateGeometryFromWkt('POINT (0 0)'))
+    f['int'] = 1
+    f['str1'] = 'test1'
+    lyr.CreateFeature(f)
+
+    f = ogr.Feature(lyr.GetLayerDefn())
+    f.SetGeometry(ogr.CreateGeometryFromWkt('POINT (1 1)'))
+    f['int'] = 2
+    f['str1'] = 'test2'
+    lyr.CreateFeature(f)
+
+    c = lyr.GetFeatureCount()
+    assert c == 2
+
+    ds = None
+
+    ds = ogr.Open('/vsimem/test.fgb', update=1)
+    lyr = ds.GetLayer(0)
+
+    assert lyr.TestCapability(ogr.OLCDeleteFeature) == 1
+    assert lyr.DeleteFeature(1) == 0
+    assert lyr.DeleteFeature(1) == ogr.OGRERR_NON_EXISTING_FEATURE
+    assert lyr.TestCapability(ogr.OLCReorderFields) == 1
+    #assert lyr.ReorderFields([0, 1]) == 0
+    assert lyr.DeleteField(1) == 0
+    f = lyr.GetFeature(0)
+    f.SetGeomField(0, ogr.CreateGeometryFromWkt('POINT (2 2)'))
+    assert lyr.SetFeature(f) == 0
+    lyr.ResetReading()
+
+    ds = None
+
+    ds = ogr.Open('/vsimem/test.fgb')
+    lyr = ds.GetLayer(0)
+
+    c = lyr.GetFeatureCount()
+    assert c == 1
+
+    f = lyr.GetNextFeature()
+    assert f is not None
+    assert f.GetGeometryRef().ExportToWkt() == 'POINT (2 2)'
+    assert f[0] == 2
+    assert f.GetFieldCount() == 1
+
+    f = lyr.GetNextFeature()
+    assert f is None
+
+    ogr.GetDriverByName('FlatGeobuf').DeleteDataSource('/vsimem/test.fgb')
+    assert not gdal.VSIStatL('/vsimem/test.fgb')

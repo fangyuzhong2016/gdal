@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Project:  ElasticSearch Translator
+ * Project:  Elasticsearch Translator
  * Purpose:
  * Author:
  *
@@ -50,8 +50,7 @@ OGRElasticDataSource::OGRElasticDataSource() :
     m_nBatchSize(100),
     m_nFeatureCountToEstablishFeatureDefn(100),
     m_bJSonField(false),
-    m_bFlattenNestedAttributes(true),
-    m_nMajorVersion(0)
+    m_bFlattenNestedAttributes(true)
 {
     const char* pszWriteMapIn = CPLGetConfigOption("ES_WRITEMAP", nullptr);
     if (pszWriteMapIn != nullptr) {
@@ -415,6 +414,7 @@ OGRLayer * OGRElasticDataSource::ICreateLayer(const char * pszLayerName,
         if( CPLFetchBool(papszOptions, "OVERWRITE_INDEX", false)  )
         {
             Delete(CPLSPrintf("%s/%s", GetURL(), osLaunderedName.c_str()));
+            bIndexExists = false;
         }
         else if( m_bOverwrite || CPLFetchBool(papszOptions, "OVERWRITE", false) )
         {
@@ -425,7 +425,7 @@ OGRLayer * OGRElasticDataSource::ICreateLayer(const char * pszLayerName,
                 CPLError(CE_Failure, CPLE_AppDefined,
                          "The index %s already exists. "
                          "You have to delete the whole index. You can do that "
-                         "with OVERWITE_INDEX=YES",
+                         "with OVERWRITE_INDEX=YES",
                          osLaunderedName.c_str());
                 return nullptr;
             }
@@ -440,6 +440,7 @@ OGRLayer * OGRElasticDataSource::ICreateLayer(const char * pszLayerName,
                 return nullptr;
             }
             Delete(CPLSPrintf("%s/%s", GetURL(), osLaunderedName.c_str()));
+            bIndexExists = false;
         }
         else
         {
@@ -694,6 +695,9 @@ bool OGRElasticDataSource::CheckVersion()
             const char* pszVersion = json_object_get_string(poNumber);
             CPLDebug("ES", "Server version: %s", pszVersion);
             m_nMajorVersion = atoi(pszVersion);
+            const char* pszDot = strchr(pszVersion, '.');
+            if( pszDot )
+                m_nMinorVersion = atoi(pszDot+1);
         }
     }
     json_object_put(poMainInfo);

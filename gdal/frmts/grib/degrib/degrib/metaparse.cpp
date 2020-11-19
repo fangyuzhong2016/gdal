@@ -460,7 +460,7 @@ static int ParseSect2_Wx (float *rdat, sInt4 nrdat, sInt4 *idat,
    }
 
    loc = 0;
-   if (nidat <= loc) {
+   if (nidat == 0) {
       errSprintf ("ERROR: Ran out of idat data\n");
       return -1;
    }
@@ -585,7 +585,7 @@ static int ParseSect2_Hazard (float *rdat, sInt4 nrdat, sInt4 *idat,
    }
 
    loc = 0;
-   if (nidat <= loc) {
+   if (nidat == 0) {
       errSprintf ("ERROR: Ran out of idat data\n");
       return -1;
    }
@@ -1553,15 +1553,7 @@ static int ParseSect4 (sInt4 *is4, sInt4 ns4, grib_MetaData *meta)
       errSprintf ("ERROR IS4 not labeled correctly. %d\n", is4[4]);
       return -2;
    }
-   if (is4[5] != 0) {
-#ifdef DEBUG
-      printf ("Un-supported template.\n  All Supported template "
-              "have 0 coordinate vertical values after template.");
-#endif
-      errSprintf ("Un-supported template.\n  All Supported template "
-                  "have 0 coordinate vertical values after template.");
-      return -4;
-   }
+
    if ((is4[7] != GS4_ANALYSIS) && (is4[7] != GS4_ENSEMBLE) &&
        (is4[7] != GS4_DERIVED) && (is4[7] != GS4_PROBABIL_PNT) &&
        (is4[7] != GS4_PERCENT_PNT) && (is4[7] != GS4_ERROR) &&
@@ -2100,6 +2092,20 @@ static int ParseSect4 (sInt4 *is4, sInt4 ns4, grib_MetaData *meta)
          errSprintf ("Un-supported Template. %ld\n", is4[7]);
          return -4;
    }
+
+   /* Do only that check at the end so that other meta fields are properly set */
+   /* otherwise we might do erroneous unit conversion as in */
+   /* https://github.com/OSGeo/gdal/issues/3158 */
+   if (is4[5] != 0) {
+#ifdef DEBUG
+      printf ("Un-supported template.\n  All Supported template "
+              "have 0 coordinate vertical values after template.");
+#endif
+      errSprintf ("Un-supported template.\n  All Supported template "
+                  "have 0 coordinate vertical values after template.");
+      return -4;
+   }
+
    return 0;
 }
 
@@ -2969,7 +2975,7 @@ void ParseGrid (VSILFILE *fp, gridAttribType *attrib, double **Grib_Data,
                          * missing values. */
    uInt4 scanIndex;     /* Where we are in the original grid. */
    sInt4 x, y;          /* Where we are in a grid of scan value 0100 */
-   sInt4 newIndex;      /* x,y in a 1 dimensional array. */
+   uInt4 newIndex;      /* x,y in a 1 dimensional array. */
    double value;        /* The data in the new units. */
    /* A pointer to Grib_Data for ease of manipulation. */
    double *grib_Data = nullptr;
@@ -3012,9 +3018,12 @@ void ParseGrid (VSILFILE *fp, gridAttribType *attrib, double **Grib_Data,
           }
       }
 
-      *grib_DataLen = subNxNy;
-      double* newData = (double *) realloc ((void *) (*Grib_Data),
-                                       (*grib_DataLen) * sizeof (double));
+      double* newData = nullptr;
+      const size_t nBufferSize = subNxNy * sizeof (double);
+      if( nBufferSize / sizeof(double) == subNxNy )
+      {
+        newData = (double *) realloc ((void *) (*Grib_Data), nBufferSize);
+      }
       if( newData == nullptr )
       {
           errSprintf ("Memory allocation failed");
@@ -3023,6 +3032,7 @@ void ParseGrid (VSILFILE *fp, gridAttribType *attrib, double **Grib_Data,
           *grib_DataLen = 0;
           return;
       }
+      *grib_DataLen = subNxNy;
       *Grib_Data = newData;
    }
    grib_Data = *Grib_Data;
@@ -3109,7 +3119,7 @@ void ParseGrid (VSILFILE *fp, gridAttribType *attrib, double **Grib_Data,
          }
          ScanIndex2XY (scanIndex, &x, &y, scan, Nx, Ny);
          /* ScanIndex returns value as if scan was 0100 */
-         newIndex = (x - 1) + (y - 1) * Nx;
+         newIndex = (uInt4)(x - 1) + (uInt4)(y - 1) * Nx;
          grib_Data[newIndex] = value;
       }
    }
@@ -3142,7 +3152,7 @@ void ParseGrid (VSILFILE *fp, gridAttribType *attrib, double **Grib_Data,
       for (scanIndex = 0; scanIndex < (uInt4)nd2x3 && scanIndex < Nx * Ny; scanIndex++) {
          ScanIndex2XY (scanIndex, &x, &y, scan, Nx, Ny);
          /* ScanIndex returns value as if scan was 0100 */
-         newIndex = (x - 1) + (y - 1) * Nx;
+         newIndex = (uInt4)(x - 1) + (uInt4)(y - 1) * Nx;
          if (attrib->fieldType) {
             value = iain[scanIndex];
          } else {
@@ -3178,7 +3188,7 @@ void ParseGrid (VSILFILE *fp, gridAttribType *attrib, double **Grib_Data,
          for (scanIndex = 0; scanIndex < (uInt4)nd2x3 && scanIndex < Nx * Ny; scanIndex++) {
             ScanIndex2XY (scanIndex, &x, &y, scan, Nx, Ny);
             /* ScanIndex returns value as if scan was 0100 */
-            newIndex = (x - 1) + (y - 1) * Nx;
+            newIndex = (uInt4)(x - 1) + (uInt4)(y - 1) * Nx;
             /* Corrected this on 5/10/2004 */
             if (ib[scanIndex] != 1) {
                grib_Data[newIndex] = xmissp;

@@ -7,7 +7,7 @@
 # Howard Butler hobu.inc@gmail.com
 
 
-gdal_version = '3.0.0'
+gdal_version = '3.1.0'
 
 import sys
 import os
@@ -344,7 +344,8 @@ if sys.version_info < (3,):
             self.check_extensions_list(self.extensions)
 
             with Pool(num_jobs) as pool:
-                pool.map(self.build_extension, self.extensions)
+                # Note: map() returns an iterator that needs to be consumed.
+                list(pool.map(self.build_extension, self.extensions))
 
         build_ext.build_extensions = parallel_build_extensions
     except:
@@ -389,11 +390,6 @@ ext_modules = [gdal_module,
                osr_module,
                ogr_module]
 
-py_modules = ['gdal',
-              'ogr',
-              'osr',
-              'gdalconst']
-
 if os.path.exists('setup_vars.ini'):
     with open('setup_vars.ini') as f:
         lines = f.readlines()
@@ -405,9 +401,8 @@ if GNM_ENABLED:
 
 if HAVE_NUMPY:
     ext_modules.append(array_module)
-    py_modules.append('gdalnumeric')
 
-packages = ["osgeo", ]
+packages = ["osgeo", "osgeo.utils", "osgeo.auxiliary"]
 
 readme = str(open('README.rst', 'rb').read())
 
@@ -457,13 +452,13 @@ setup_kwargs = dict(
     description=description,
     license=license_type,
     classifiers=classifiers,
-    py_modules=py_modules,
     packages=packages,
     url=url,
     data_files=data_files,
     ext_modules=ext_modules,
     scripts=glob('scripts/*.py'),
-    cmdclass={'build_ext': gdal_ext}
+    cmdclass={'build_ext': gdal_ext},
+    extras_require={'numpy': ['numpy > 1.0.0']},
 )
 
 # This section can be greatly simplified with python >= 3.5 using **

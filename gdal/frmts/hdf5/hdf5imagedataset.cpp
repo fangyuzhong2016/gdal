@@ -600,7 +600,7 @@ void GDALRegister_HDF5Image()
     poDriver->SetDescription("HDF5Image");
     poDriver->SetMetadataItem(GDAL_DCAP_RASTER, "YES");
     poDriver->SetMetadataItem(GDAL_DMD_LONGNAME, "HDF5 Dataset");
-    poDriver->SetMetadataItem(GDAL_DMD_HELPTOPIC, "frmt_hdf5.html");
+    poDriver->SetMetadataItem(GDAL_DMD_HELPTOPIC, "drivers/raster/hdf5.html");
     poDriver->SetMetadataItem( GDAL_DCAP_VIRTUALIO, "YES" );
 
     poDriver->pfnOpen = HDF5ImageDataset::Open;
@@ -964,9 +964,11 @@ void HDF5ImageDataset::IdentifyProductType()
     // If there is a Mission_ID field.
     if(pszMissionId != nullptr && strstr(GetDescription(), "QLK") == nullptr)
     {
-        // Check if the mission type is CSK or KMPS.
+        // Check if the mission type is CSK, KMPS or CSG.
         // KMPS: Komsat-5 is Korean mission with a SAR instrument.
-        if(EQUAL(pszMissionId, "CSK") || EQUAL(pszMissionId, "KMPS"))
+        // CSG: Cosmo Skymed 2nd Generation
+        if(EQUAL(pszMissionId, "CSK") || EQUAL(pszMissionId, "KMPS")
+           || EQUAL(pszMissionId, "CSG"))
         {
             iSubdatasetType = CSK_PRODUCT;
 

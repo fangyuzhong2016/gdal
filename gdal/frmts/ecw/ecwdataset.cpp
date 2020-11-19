@@ -35,7 +35,6 @@
 #include "gdal_frmts.h"
 #include "ogr_spatialref.h"
 #include "ogr_api.h"
-#include "ogr_geometry.h"
 
 #include "../mem/memdataset.h"
 
@@ -45,7 +44,7 @@ CPL_CVSID("$Id$")
 
 #ifdef FRMT_ecw
 
-constexpr unsigned char jpc_header[] = {0xff,0x4f};
+constexpr unsigned char jpc_header[] = {0xff,0x4f,0xff,0x51}; // SOC + RSIZ markers
 constexpr unsigned char jp2_header[] =
     {0x00,0x00,0x00,0x0c,0x6a,0x50,0x20,0x20,0x0d,0x0a,0x87,0x0a};
 
@@ -206,7 +205,6 @@ ECWRasterBand::ECWRasterBand( ECWDataset *poDSIn, int nBandIn, int iOverviewIn,
 /************************************************************************/
 
 ECWRasterBand::~ECWRasterBand()
-
 {
     GDALRasterBand::FlushCache();
 
@@ -308,7 +306,8 @@ CPLErr ECWRasterBand::GetDefaultHistogram( double *pdfMin, double *pdfMax,
     }
     GetBandIndexAndCountForStatistics(nStatsBandIndex, nStatsBandCount);
     bool bHistogramFromFile = false;
-    if ( poGDS->pStatistics != nullptr ){
+
+    if (poGDS->pStatistics != nullptr) {
         NCSBandStats& bandStats = poGDS->pStatistics->BandsStats[nStatsBandIndex];
         if ( bandStats.Histogram != nullptr && bandStats.nHistBucketCount > 0 ){
             *pnBuckets = bandStats.nHistBucketCount;
@@ -329,7 +328,7 @@ CPLErr ECWRasterBand::GetDefaultHistogram( double *pdfMin, double *pdfMax,
         }
     }
 
-    if (!bHistogramFromFile ){
+    if (!bHistogramFromFile) {
         if (bForce == TRUE){
             //compute. Save.
             pamError = GDALPamRasterBand::GetDefaultHistogram(pdfMin, pdfMax, pnBuckets, ppanHistogram, TRUE, f,pProgressData);
@@ -2107,7 +2106,7 @@ CPLErr ECWDataset::IRasterIO( GDALRWFlag eRWFlag,
     {
         // This is tricky, because it expects the rest of the image
         // with this buffer width to be read. The preferred way to
-        // achieve this behaviour would be to call AdviseRead before
+        // achieve this behavior would be to call AdviseRead before
         // call IRasterIO.  The logic could be improved to detect
         // successive pattern of single line reading before doing an
         // AdviseRead.
@@ -2541,17 +2540,18 @@ CNCSJP2FileView *ECWDataset::OpenFileView( const char *pszDatasetName,
         {
             CPLDebug( "ECW", "Got mutex." );
         }
-        
+
         poFileView = new CNCSJP2FileView();
 
 #if ECWSDK_VERSION >= 55
-        NCS::CString streamName(pszDatasetName);
-        auto vsiIoStream = NCS::CView::FindSteamByStreamNameFromOpenDatasets(streamName);
-        if (!vsiIoStream) {
-            vsiIoStream = std::make_shared<VSIIOStream>();
-            std::static_pointer_cast<VSIIOStream>(vsiIoStream)->Access(fpVSIL, FALSE, TRUE, pszDatasetName, 0, -1);
-        }
-        oErr = poFileView->Open(vsiIoStream, bProgressive);
+       NCS::CString streamName(pszDatasetName);
+       auto vsiIoStream = NCS::CView::FindSteamByStreamNameFromOpenDatasets(streamName);
+       if (!vsiIoStream) {
+           vsiIoStream = std::make_shared<VSIIOStream>();
+           std::static_pointer_cast<VSIIOStream>(vsiIoStream)->Access(fpVSIL, FALSE, TRUE, pszDatasetName, 0, -1);
+           bUsingCustomStream = TRUE;
+       }
+       oErr = poFileView->Open(vsiIoStream, bProgressive);
 #else
         auto vsiIoStream = new VSIIOStream();
         vsiIoStream->Access(fpVSIL, FALSE, TRUE, pszDatasetName, 0, -1);
@@ -2574,7 +2574,7 @@ CNCSJP2FileView *ECWDataset::OpenFileView( const char *pszDatasetName,
         VSIIOStream * poUnderlyingIOStream =
             ((VSIIOStream *)(poFileView->GetStream()));
 
-        if ( poUnderlyingIOStream )
+        if (poUnderlyingIOStream)
             poUnderlyingIOStream->nFileViewCount++;
 
         if ( vsiIoStream != poUnderlyingIOStream )
@@ -3143,7 +3143,7 @@ void ECWDataset::ECW2WKTProjection()
 /* -------------------------------------------------------------------- */
     OGRSpatialReference oSRS;
 
-    /* For backward-compatible with previous behaviour. Should we only */
+    /* For backward-compatible with previous behavior. Should we only */
     /* restrict to those 2 values ? */
     if (psFileInfo->eCellSizeUnits != ECW_CELL_UNITS_METERS &&
         psFileInfo->eCellSizeUnits != ECW_CELL_UNITS_FEET)
@@ -3419,7 +3419,7 @@ void ECWInitialize()
     /*      Version 3.x and 4.x of the ECWJP2 SDK did not resolve datum and */
     /*      projection to EPSG code using internal mapping.                 */
     /*      Version 5.x do so we provide means to achieve old               */
-    /*      behaviour.                                                      */
+    /*      behavior.                                                      */
     /* -------------------------------------------------------------------- */
     #if ECWSDK_VERSION >= 50
     if( CPLTestBool( CPLGetConfigOption("ECW_DO_NOT_RESOLVE_DATUM_PROJECTION","NO") ) == TRUE)
@@ -3555,7 +3555,7 @@ void GDALRegister_ECW()
     osLongName += ")";
 
     poDriver->SetMetadataItem( GDAL_DMD_LONGNAME, osLongName );
-    poDriver->SetMetadataItem( GDAL_DMD_HELPTOPIC, "frmt_ecw.html" );
+    poDriver->SetMetadataItem( GDAL_DMD_HELPTOPIC, "drivers/raster/ecw.html" );
     poDriver->SetMetadataItem( GDAL_DMD_EXTENSION, "ecw" );
 
     poDriver->pfnIdentify = ECWDataset::IdentifyECW;
@@ -3652,7 +3652,7 @@ void GDALRegister_JP2ECW()
     osLongName += ")";
 
     poDriver->SetMetadataItem( GDAL_DMD_LONGNAME, osLongName );
-    poDriver->SetMetadataItem( GDAL_DMD_HELPTOPIC, "frmt_jp2ecw.html" );
+    poDriver->SetMetadataItem( GDAL_DMD_HELPTOPIC, "drivers/raster/jp2ecw.html" );
     poDriver->SetMetadataItem( GDAL_DMD_EXTENSION, "jp2" );
     poDriver->SetMetadataItem( GDAL_DCAP_VIRTUALIO, "YES" );
 
